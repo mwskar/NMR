@@ -18,7 +18,7 @@ integer :: count
 !!! variables for spline
 double precision :: bvals(0:MAXPTS), cvals(0:MAXPTS), dvals(0:MAXPTS)
 
-
+double precision :: hld
 
 
 !!!!!!!Read in instructions and store values
@@ -78,6 +78,9 @@ end if
 print *, ypts(0)
 
 call buildSpline(xpts, ypts, bvals, cvals, dvals, count)
+
+
+
 
 contains
 
@@ -173,9 +176,9 @@ do j = count, 0, -1
     dvals(j) = (cvals(j+1) - cvals(j)) / (3 * hvals(j))
 end do
 
-do l = 0, count - 1
-    print *, ypts(l), bvals(l), cvals(l)
-end do
+!do l = 0, count - 1
+!    print *, ypts(l), bvals(l), cvals(l)
+!end do
 
 end subroutine buildSpline
 
@@ -209,11 +212,11 @@ end function calcSpline
 
 !!!!!!!!!!!!!! Bisection !!!!!!!!!!!!!!!
 
-double precision function bisection (lowerBound, upperBound, xpts, ypts, tolerance, baseline)
+double precision function bisection (lowerBound, upperBound)
 
-double precision, intent (in) :: xpts(0:MAXPTS),ypts(0:MAXPTS)
-double precision, intent (in) :: lowerBound, upperBound, baseline
-double precision :: tLower, tUpper, guess, prevAnswer, answer, difference, calcSpline, lval, uval
+!double precision, intent (in) :: xpts(0:MAXPTS),ypts(0:MAXPTS)
+double precision, intent (in) :: lowerBound, upperBound
+double precision :: tLower, tUpper, guess, prevAnswer, answer, difference, lval, uval
 integer :: i
 
 tLower = lowerBound
@@ -223,9 +226,12 @@ lval = calcSpline(tLower, xpts, ypts, bvals, cvals, dvals, count)
 uval = calcSpline(tUpper, xpts, ypts, bvals, cvals, dvals, count)
 prevAnswer = 0
 answer = calcSpline(guess, xpts, ypts, bvals, cvals, dvals, count)
-difference = 0
+difference = 1
+
+
 
 do while(difference > tolerance)
+
     if (lval > baseline .and. answer > baseline) then
         tLower = guess
         guess = (tLower + tUpper ) / 2
@@ -239,13 +245,13 @@ do while(difference > tolerance)
 
     lval = calcSpline(tLower, xpts, ypts, bvals, cvals, dvals, count)
     uval = calcSpline(tUpper, xpts, ypts, bvals, cvals, dvals, count)
-    
+
     answer = calcSpline(guess, xpts, ypts, bvals, cvals, dvals, count)
     difference = abs(prevAnswer - answer)
     prevAnswer = answer
 end do
     
-    bisection = answer
+    bisection = guess
 
 end function bisection
 
