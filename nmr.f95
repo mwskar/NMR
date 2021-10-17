@@ -60,6 +60,8 @@ count = count + 1
 goto 100 
 200 continue
 close(16)
+
+
 if (filtertype /= 0 .and. filterSize /= 0) then
     if (filtertype == 1) then
         do l = 1, filterPasses
@@ -178,12 +180,12 @@ end do
 end subroutine buildSpline
 
 
-end program nmr
+
 
 
 !!!!!!!!!! Calc Spline !!!!!!!!!!!!!!!!!
 
-function calcSpline(find, xpts, ypts, bvals, cvals, dvals, count)
+double precision function calcSpline(find, xpts, ypts, bvals, cvals, dvals, count)
 
 
 double precision, intent (in) :: xpts(0:MAXPTS),ypts(0:MAXPTS), bvals(0:MAXPTS), cvals(0:MAXPTS), dvals(0:MAXPTS)
@@ -203,3 +205,48 @@ ans = ypts(eqchoose) + bvals(eqchoose) * (find -xpts(eqchoose))
 calcSpline = ans
 
 end function calcSpline
+
+
+!!!!!!!!!!!!!! Bisection !!!!!!!!!!!!!!!
+
+double precision function bisection (lowerBound, upperBound, xpts, ypts, tolerance, baseline)
+
+double precision, intent (in) :: xpts(0:MAXPTS),ypts(0:MAXPTS)
+double precision, intent (in) :: lowerBound, upperBound, baseline
+double precision :: tLower, tUpper, guess, prevAnswer, answer, difference, calcSpline, lval, uval
+integer :: i
+
+tLower = lowerBound
+tUpper = upperBound
+guess = (upperBound + lowerBound ) / 2
+lval = calcSpline(tLower, xpts, ypts, bvals, cvals, dvals, count)
+uval = calcSpline(tUpper, xpts, ypts, bvals, cvals, dvals, count)
+prevAnswer = 0
+answer = calcSpline(guess, xpts, ypts, bvals, cvals, dvals, count)
+difference = 0
+
+do while(difference > tolerance)
+    if (lval > baseline .and. answer > baseline) then
+        tLower = guess
+        guess = (tLower + tUpper ) / 2
+    else if (lval < baseline .and. answer < baseline) then
+        tLower = guess
+        guess = (tLower + tUpper ) / 2
+    else
+        tUpper = guess
+        guess = (tLower + tUpper ) / 2
+    end if
+
+    lval = calcSpline(tLower, xpts, ypts, bvals, cvals, dvals, count)
+    uval = calcSpline(tUpper, xpts, ypts, bvals, cvals, dvals, count)
+    
+    answer = calcSpline(guess, xpts, ypts, bvals, cvals, dvals, count)
+    difference = abs(prevAnswer - answer)
+    prevAnswer = answer
+end do
+    
+    bisection = answer
+
+end function bisection
+
+end program nmr
