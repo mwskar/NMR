@@ -66,7 +66,7 @@ if (filtertype /= 0 .and. filterSize /= 0) then
     if (filtertype == 1) then
         do l = 1, filterPasses
             print *, "pass ", l
-            call boxFilter(filterSize, xpts, ypts, count)
+            call boxFilter(filterSize, ypts, count)
         end do
     else if (filtertype == 2) then
     end if
@@ -95,27 +95,60 @@ subroutine test(ypts)
 end subroutine test
 
 
+
+
+
 !!!!!!!!!!!!! Box Car !!!!!!!!!!!!!!!!!!!
 
-subroutine boxFilter(filterSize, xpts, ypts, count)
+subroutine boxFilter(filterSize, ypts, count)
 
     integer, intent (in) :: filterSize, count
-    double precision, intent (inout) :: xpts(0:MAXPTS), ypts(0:MAXPTS)
-    double precision :: ysum
-    integer :: offset
+    double precision, intent (inout) :: ypts(0:MAXPTS)
+    double precision :: ysum, temp(0:MAXPTS)
+    integer :: offset, i, j, l, k, lowBound, upBound
 
+    temp(0:) = ypts(0:)
     offset = filterSize / 2
-    do i = offset + 1, (count - offset) + 1, 1
+    
+
+
+    k = 0
+    iloop: do i = 0, count, 1
         ysum = 0
-        do j = i - offset, i + offset
+        lowBound = i - offset
+        upBound = i + offset
+        
+        if (lowBound < 0) then
+            do k = lowBound , -1, 1
+                ysum = ysum + ypts(count + k + 1)
+                lowBound = lowBound + 1
+            end do
+        end if
+        
+        if (upBound > count) then
+           
+            do l = upBound - count - 1, 0, -1
+                ysum = ysum + ypts(l)
+                upBound = upBound - 1
+            end do 
+        end if
+
+
+        do j = lowBound, upBound, 1
             ysum = ysum + ypts(j)
         end do
-        ysum = ysum / filterSize
-        print *, "New Y: ", ysum, " | for ", xpts(i)
-        ypts(i) = ysum
-    end do
 
+        ysum = ysum / filterSize
+        
+        temp(i) = ysum
+    end do iloop
+
+    ypts(0:) = temp(0:)
 end subroutine boxFilter
+
+
+
+
 
 !!!!!!!!!! SG Filter !!!!!!!!!!!!!!
 
@@ -201,9 +234,9 @@ do i = 0, count
     if (find >= xpts(i)) eqchoose = eqchoose + 1
 end do
 
-ans = ypts(eqchoose) + bvals(eqchoose) * (find -xpts(eqchoose))
-      ans = ans + cvals(eqchoose) * ((find -xpts(eqchoose))**2)
-      ans = ans + dvals(eqchoose) * ((find -xpts(eqchoose))**3)
+ans = ypts(eqchoose) + bvals(eqchoose) * (find - xpts(eqchoose))
+      ans = ans + cvals(eqchoose) * ((find - xpts(eqchoose))**2)
+      ans = ans + dvals(eqchoose) * ((find - xpts(eqchoose))**3)
 
 calcSpline = ans
 
