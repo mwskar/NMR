@@ -62,20 +62,20 @@ goto 100
 close(16)
 
 
+call TMshift
+
+
 if (filtertype /= 0 .and. filterSize /= 0) then
     if (filtertype == 1) then
         do l = 1, filterPasses
             print *, "pass ", l
-            call boxFilter(filterSize, ypts, count)
+            call boxFilter
         end do
     else if (filtertype == 2) then
     end if
 else
     print *, "Filter is off"
 end if
-
-
-print *, ypts(0)
 
 call buildSpline(xpts, ypts, bvals, cvals, dvals, count)
 
@@ -89,10 +89,47 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-subroutine test(ypts)
-    double precision:: ypts(0:MAXPTS)
-    print *, ypts(0) 
-end subroutine test
+subroutine TMShift
+        logical :: run
+        integer :: p , ac
+        double precision :: arry(15),arrx(15), highY, shift
+        
+        highY = 0
+        run = .true.
+        ac = 15
+        p = count
+        do while (ypts(p) < baseline)      
+                p = p - 1
+        enddo
+        
+         do while (run)
+                if (ypts(p) > baseline) then
+                        arry(ac) = ypts(p)
+                        arrx(ac) = xpts(p)
+                        ac = ac - 1
+                        print *, "Ac ", ac
+                else
+                        run = .false.
+                end if
+                p = p - 1
+         enddo
+
+
+        do l = ac, 15, 1
+                print *, "Arry(ac)", arry(l), l
+                if (arry(l) > highY) then
+                        print *, "High ", highY
+                        highY = arry(l)
+                        shift = arrx(l)
+                endif                
+        enddo
+        
+        do l = 0, count,1
+                xpts(l) = xpts(l) - shift
+        end do
+        
+
+end subroutine TMShift
 
 
 
@@ -100,10 +137,10 @@ end subroutine test
 
 !!!!!!!!!!!!! Box Car !!!!!!!!!!!!!!!!!!!
 
-subroutine boxFilter(filterSize, ypts, count)
+subroutine boxFilter
 
-    integer, intent (in) :: filterSize, count
-    double precision, intent (inout) :: ypts(0:MAXPTS)
+    !integer, intent (in) :: filterSize, count
+    !double precision, intent (inout) :: ypts(0:MAXPTS)
     double precision :: ysum, temp(0:MAXPTS)
     integer :: offset, i, j, l, k, lowBound, upBound
 
@@ -112,7 +149,6 @@ subroutine boxFilter(filterSize, ypts, count)
     
 
 
-    k = 0
     iloop: do i = 0, count, 1
         ysum = 0
         lowBound = i - offset
@@ -152,15 +188,14 @@ end subroutine boxFilter
 
 !!!!!!!!!! SG Filter !!!!!!!!!!!!!!
 
-subroutine SGFilter(filterSize, count, ypts, m)
+subroutine SGFilter
 
-integer, intent (in) :: count
-double precision, intent (inout) :: ypts(:)
-double precision, intent(out) :: m
+double precision :: m
 
 m = count - (filterSize - 1)
 
-
+do i = 2, filterSize
+end do
 
 
 end subroutine SGFilter
@@ -217,14 +252,18 @@ end subroutine buildSpline
 
 
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!! Functions !!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 
 
 !!!!!!!!!! Calc Spline !!!!!!!!!!!!!!!!!
 
-double precision function calcSpline(find, xpts, ypts, bvals, cvals, dvals, count)
+double precision function calcSpline(find)!, xpts, ypts, bvals, cvals, dvals, count)
 
 
-double precision, intent (in) :: xpts(0:MAXPTS),ypts(0:MAXPTS), bvals(0:MAXPTS), cvals(0:MAXPTS), dvals(0:MAXPTS)
+!double precision, intent (in) :: xpts(0:MAXPTS),ypts(0:MAXPTS), bvals(0:MAXPTS), cvals(0:MAXPTS), dvals(0:MAXPTS)
 double precision, intent (in) :: find
 double precision :: ans
 integer :: eqchoose, count
@@ -255,10 +294,10 @@ integer :: i
 tLower = lowerBound
 tUpper = upperBound
 guess = (upperBound + lowerBound ) / 2
-lval = calcSpline(tLower, xpts, ypts, bvals, cvals, dvals, count)
-uval = calcSpline(tUpper, xpts, ypts, bvals, cvals, dvals, count)
+lval = calcSpline(tLower)
+uval = calcSpline(tUpper)
 prevAnswer = 0
-answer = calcSpline(guess, xpts, ypts, bvals, cvals, dvals, count)
+answer = calcSpline(guess)
 difference = 1
 
 
@@ -276,10 +315,10 @@ do while(difference > tolerance)
         guess = (tLower + tUpper ) / 2
     end if
 
-    lval = calcSpline(tLower, xpts, ypts, bvals, cvals, dvals, count)
-    uval = calcSpline(tUpper, xpts, ypts, bvals, cvals, dvals, count)
+    lval = calcSpline(tLower)
+    uval = calcSpline(tUpper)
 
-    answer = calcSpline(guess, xpts, ypts, bvals, cvals, dvals, count)
+    answer = calcSpline(guess)
     difference = abs(prevAnswer - answer)
     prevAnswer = answer
 end do
@@ -287,5 +326,54 @@ end do
     bisection = guess
 
 end function bisection
+
+
+
+function ncInt(low, up)
+double precision, intent (in):: up, low
+double precision :: h
+
+h = (up - low) / 2
+
+ncInt = (h/3) * (calcSpline(low) + (4 * calcSpline(low+h) ) + calcSpline(up))
+
+end function ncInt
+
+function romberg(low,up)
+double precision, intent (in) :: low, up
+double precision :: intsum, ans
+double precision :: h, arr(0:10,0:10)
+integer :: i
+
+ans = -1.0D0
+
+i = 1
+
+h = low - up
+arr(0,0) = (h/2) * (calcSpline(low) + calcSpline(up))
+
+do while ( (arr(1,i-1) - arr(2,i) ) < tolerance )
+    intsum = 0.0D0
+    do k = 1, 2**(i-2)
+        intsum = intsum + calcSpline(low + (k-0.5D0)*h)
+    end do
+    
+    arr(2,0) = (1/2) * ( arr(i-1,i-1) + h * intsum)
+
+    do j = 1, i
+        arr(2,j) = arr(2,j-1) + ( (arr(2,j-1) - arr(1,j-1)) / (4**(j-1) -1) )
+    end do
+    i = i +1
+
+    do l=0,10
+        arr(1,l) = arr(2,l)
+    end do
+
+end do
+
+romberg = ans
+
+end function romberg
+
 
 end program nmr
