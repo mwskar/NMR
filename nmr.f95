@@ -16,9 +16,14 @@ integer :: count
 
 
 !!! variables for spline
-double precision :: bvals(0:MAXPTS), cvals(0:MAXPTS), dvals(0:MAXPTS)
+double precision :: bvals(0:MAXPTS), cvals(0:MAXPTS), dvals(0:MAXPTS), x(0:MAXPTS)
 
 double precision :: hld
+
+
+!!! Vars for integration and output
+double precision :: lowIntPts(1:10), upIntPts(1:10),intAreas(1:10)
+integer :: peaks
 
 
 !!!!!!!Read in instructions and store values
@@ -61,9 +66,9 @@ goto 100
 200 continue
 close(16)
 
-
+!print *, xpts(0:count)
 call TMshift
-
+!print *, xpts(0:count)
 
 if (filtertype /= 0 .and. filterSize /= 0) then
     if (filtertype == 1) then
@@ -77,26 +82,61 @@ else
     print *, "Filter is off"
 end if
 
+
+
 call buildSpline(xpts, ypts, bvals, cvals, dvals, count)
+
+
+!do i =0, 2
+!  hld = xpts(i)
+!  print*, "Xpts i = ", hld
+!  print*, calcSpline(hld)
+!end do
+
+
+open (unit=17, file=outputfile, status='unknown')
+  hld = xpts(0)
+  do while (hld <= xpts(count))
+    write (17,*) hld, calcSpline(hld)
+    hld = hld + (abs(xpts(count) - xpts(0)) / 10000.0D0)
+  end do
+close(17)
+
+call findIntPoints
+do i =1, peaks
+  print *, "Peak at: ", lowIntPts(i) , upIntPts(i)
+end do
+
+
+
+call integrate
+
+
+do i=1, peaks
+  print *, intAreas(i)
+end do
 
 
 
 
 contains
 
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!! Subroutines !!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
+!!!!!!!!!!! TMS Shift !!!!!!!!!!!!!!!!
+
 subroutine TMShift
         logical :: run
-        integer :: p , ac
-        double precision :: arry(15),arrx(15), highY, shift
+        integer :: p , ac, l
+        double precision :: arry(0:500),arrx(0:500), highY, shift
         
         highY = 0
         run = .true.
-        ac = 15
+        ac = 500
         p = count
         do while (ypts(p) < baseline)      
                 p = p - 1
@@ -107,7 +147,7 @@ subroutine TMShift
                         arry(ac) = ypts(p)
                         arrx(ac) = xpts(p)
                         ac = ac - 1
-                        print *, "Ac ", ac
+                        !print *, "Ac ", ac
                 else
                         run = .false.
                 end if
@@ -115,10 +155,10 @@ subroutine TMShift
          enddo
 
 
-        do l = ac, 15, 1
-                print *, "Arry(ac)", arry(l), l
+        do l = ac, 500, 1
+                !print *, "Arry(ac)", arry(l), l
                 if (arry(l) > highY) then
-                        print *, "High ", highY
+                        !print *, "High ", highY
                         highY = arry(l)
                         shift = arrx(l)
                 endif                
@@ -147,7 +187,7 @@ subroutine boxFilter
     temp(0:) = ypts(0:)
     offset = filterSize / 2
     
-
+    ysum = 0.0D0
 
     iloop: do i = 0, count, 1
         ysum = 0
@@ -174,7 +214,7 @@ subroutine boxFilter
             ysum = ysum + ypts(j)
         end do
 
-        ysum = ysum / filterSize
+        ysum = ysum / real(filterSize, kind = 8)
         
         temp(i) = ysum
     end do iloop
@@ -191,6 +231,7 @@ end subroutine boxFilter
 subroutine SGFilter
 
 double precision :: m
+integer :: i
 
 m = count - (filterSize - 1)
 
@@ -199,6 +240,7 @@ end do
 
 
 end subroutine SGFilter
+
 
 
 !!!!!!!!!! Build Spline !!!!!!!!!!!!!
@@ -211,8 +253,8 @@ double precision, intent (in) :: xpts(0:MAXPTS), ypts(0:MAXPTS)
 double precision :: alvals(0:MAXPTS), lvals(0:MAXPTS)
 double precision :: muvals(0:MAXPTS),zvals(0:MAXPTS)
 double precision :: hvals(0:MAXPTS)
-
-integer :: i, count
+integer, intent (in) :: count
+integer :: i, j, l
 
 do i = 0, count
     hvals(i) = xpts(i + 1)- xpts(i)
@@ -245,11 +287,54 @@ do j = count, 0, -1
 end do
 
 !do l = 0, count - 1
-!    print *, ypts(l), bvals(l), cvals(l)
+    !print *, ypts(l), bvals(l), cvals(l), dvals(l)
 !end do
 
 end subroutine buildSpline
 
+
+
+!!!!!!!!!!!!Find int points !!!!!!!!!!!!!
+
+subroutine findIntPoints
+integer :: peakCount, i
+
+peakCount = 1
+i = 1
+do while (xpts(i) < 0.0D0)
+  if (ypts(i-1)>baseline .and. ypts(i)<baseline) then
+    print *, "Upper end"
+    upIntPts(peakCount) = bisection(xpts(i-1),xpts(i))
+    peakCount = peakCount + 1
+  else if(ypts(i-1)<baseline .and. ypts(i)>baseline) then
+    print *, "Lower end"
+    lowIntPts(peakCount) = bisection(xpts(i-1),xpts(i))
+  end if
+  
+  i = i + 1
+end do
+
+peaks = peakCount - 1
+
+end subroutine findIntPoints
+
+
+subroutine integrate
+integer :: k
+
+do k = 1, peaks, 1
+  print *, "Running"
+  if (integrationChoice == 0) then
+    intAreas(k) = CNC(lowIntPts(k), upIntPts(k))
+  else if (integrationChoice == 1) then
+    intAreas(k) = romberg(lowIntPts(k), upIntPts(k))
+  else if (integrationChoice == 2) then
+    intAreas(k) = adquad(lowIntPts(k), upIntPts(k), tolerance)
+  else
+  end if
+end do
+
+end subroutine integrate
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -266,12 +351,17 @@ double precision function calcSpline(find)!, xpts, ypts, bvals, cvals, dvals, co
 !double precision, intent (in) :: xpts(0:MAXPTS),ypts(0:MAXPTS), bvals(0:MAXPTS), cvals(0:MAXPTS), dvals(0:MAXPTS)
 double precision, intent (in) :: find
 double precision :: ans
-integer :: eqchoose, count
+integer :: eqchoose, i
+
+
+!print *, "Calc spline for : ", find
 
 eqchoose = -1
 do i = 0, count
     if (find >= xpts(i)) eqchoose = eqchoose + 1
 end do
+
+!print *, "Using equation: ", eqchoose
 
 ans = ypts(eqchoose) + bvals(eqchoose) * (find - xpts(eqchoose))
       ans = ans + cvals(eqchoose) * ((find - xpts(eqchoose))**2)
@@ -306,14 +396,13 @@ do while(difference > tolerance)
 
     if (lval > baseline .and. answer > baseline) then
         tLower = guess
-        guess = (tLower + tUpper ) / 2
     else if (lval < baseline .and. answer < baseline) then
         tLower = guess
-        guess = (tLower + tUpper ) / 2
     else
         tUpper = guess
-        guess = (tLower + tUpper ) / 2
     end if
+
+    guess = (tLower + tUpper ) / 2.0D0
 
     lval = calcSpline(tLower)
     uval = calcSpline(tUpper)
@@ -329,15 +418,147 @@ end function bisection
 
 
 
-function simpson(low, up)
+
+!!!!!!!!!! Simpson Integration !!!!!!!!!!!
+
+double precision function simpson(low, up)
 double precision, intent (in):: up, low
 double precision :: h
 
 h = (up - low) / 2
 
-ncInt = (h/3) * (calcSpline(low) + (4 * calcSpline(low+h) ) + calcSpline(up))
+simpson = (h/3.0D0) * ((calcSpline(low) - baseline) + (4.0D0 * (calcSpline(low+h)-baseline) ) + (calcSpline(up)-baseline))
 
 end function simpson
+
+
+!!!!!!!! Compotite Newton Cotes !!!!!!!!!!!
+
+double precision function CNC(low, up)
+
+double precision, intent (in):: low,up
+double precision :: h, prev, cur, ends, evens, odds, ihold, tol
+integer :: run, counter, i
+
+tol = tolerance
+counter = 0
+
+cur = 1.0D0
+prev = 0.0D0
+ends = calcSpline(low) + calcSpline(up) - 2*baseline
+run = 3
+
+
+!print *, "Diff: ", cur - prev, tol
+
+do while (cur - prev >= tol)
+  print *, "Calc"
+  prev = cur
+  evens = 0.0D0
+  odds = 0.0D0
+  h = (up - low) / run
+  
+  do i = 1, run - 1
+    ihold = i
+    if (mod(i,2)==0) then
+    !print *, "Evens: ", evens, " plus ", calcSpline(low + (ihold*h)), " @ ", low + (ihold*h)
+      evens = evens + ( calcspline(low + (ihold*h)) - baseline )
+      
+    else
+    !print *, "Odds: ", odds, " plus ", calcSpline(low + (ihold*h)), " @ ", low + (ihold*h)
+      odds = odds + ( calcSpline(low + (ihold*h)) - baseline)
+    end if
+  end do
+  
+  cur = (h* (ends + (2 * evens) + (4* odds)) )/3.0D0
+  !print *, "Cur | ", cur, " | Prev | ", prev, " | Diff | ", cur - prev
+  run = run + 2
+  !counter = counter + 1
+end do
+
+CNC = cur
+end function CNC
+
+
+!!!!!!!!! Romberg !!!!!!!!!!!!!!!!
+
+double precision function romberg(low, up)
+
+
+double precision, intent (in) :: low, up
+double precision :: intsum, ans
+double precision :: h, arr(1:2,1:10)
+integer :: i
+logical :: run
+
+
+ans = -1.0D0
+
+run = .true.
+
+
+h = up - low
+
+arr(1,1) =(h/2) * (calcSpline(low) + calcSpline(up))
+
+i = 2
+do while (i <= 10 .and. run )
+    !print *, "Tol check : ", arr(1,i-1) - arr(2,i)
+    intsum = 0.0D0
+    do k = 1, 2**(i-2)
+        intsum = intsum + ( calcSpline(low + (k-0.5D0)*h) - baseline)
+        !print *, "Sum: ", intsum
+    end do
+    
+    arr(2,1) = (0.5D0) * ( arr(1,1) + h * intsum)
+    !print *, "new root: ", arr(2,1)
+    do j = 2, i
+        arr(2,j) = arr(2,j-1) + ( (arr(2,j-1) - arr(1,j-1)) / (4**(j-1) -1) )
+    end do
+
+    !print *, arr(2,1:i)
+
+
+    if (abs(arr(1,i-1) - arr(2,i) ) < tolerance) run = .false.
+
+    do l=1,10
+        arr(1,l) = arr(2,l)
+    end do
+
+    romberg = arr(1,i)
+
+    h = h / 2
+    i = i + 1
+
+end do
+
+end function romberg
+
+
+
+
+
+!!!!!!!!! Adaptive Quadurature !!!!!!!!!!!!!!
+
+double precision recursive function adquad(low, up, tol) result (ans)
+double precision, intent (in) :: low,up,tol
+double precision :: mid, cur, halves
+
+!print *, "Run"
+mid =( up + low ) / 2
+cur = simpson(low,up)
+halves = simpson(low,mid) + simpson(mid,up)
+
+!print *, cur , halves
+
+if (cur - halves < tol) then
+ans= halves
+else
+ans = adquad(low, mid, tol/2) + adquad(mid, up, tol/2)
+end if
+
+
+end function adquad
 
 
 end program nmr
