@@ -136,7 +136,7 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-!!!!!!!!!!! TMS Shift !!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TMS Shift !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine TMShift
         logical :: run
@@ -184,7 +184,7 @@ end subroutine TMShift
 
 
 
-!!!!!!!!!!!!! Box Car !!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Box Car !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine boxFilter
 
@@ -236,7 +236,7 @@ end subroutine boxFilter
 
 
 
-!!!!!!!!!! SG Filter !!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! SG Filter !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine SGFilter
 
@@ -259,7 +259,7 @@ subroutine SGFilter
     offset = (filterSize - 1)/ 2
     wcount = 1
     
-    print *, "Offset: ", offset, filterSize
+    !print *, "Offset: ", offset, filterSize
     
     ysum = 0.0D0
     
@@ -322,7 +322,7 @@ end subroutine SGFilter
 
 
 
-!!!!!!!!!! Build Spline !!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Build Spline !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine buildSpline(xpts, ypts, bvals, cvals, dvals, count)
 
@@ -373,7 +373,7 @@ end subroutine buildSpline
 
 
 
-!!!!!!!!!!!!Find int points !!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Find int points !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine findIntPoints
 integer :: peakCount, i
@@ -397,7 +397,7 @@ peaks = peakCount - 1
 
 end subroutine findIntPoints
 
-!!!!!!!!!!!!!!!! Integrate !!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Integrate !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine integrate
 integer :: k
 
@@ -410,6 +410,7 @@ do k = 1, peaks, 1
   else if (integrationChoice == 2) then
     intAreas(k) = adquad(lowIntPts(k), upIntPts(k), tolerance)
   else
+    intAreas(k) = Gauss(lowIntPts(k),upIntPts(k))
   end if
 end do
 
@@ -422,7 +423,7 @@ end subroutine integrate
 
 
 
-!!!!!!!!!! Calc Spline !!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Calc Spline !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 double precision function calcSpline(find)!, xpts, ypts, bvals, cvals, dvals, count)
 
@@ -617,7 +618,7 @@ end function romberg
 
 
 
-!!!!!!!!! Adaptive Quadurature !!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Adaptive Quadurature !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 double precision recursive function adquad(low, up, tol) result (ans)
 double precision, intent (in) :: low,up,tol
@@ -638,6 +639,47 @@ end if
 
 
 end function adquad
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Gauss Quad !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+double precision function Gauss(low,up)
+
+
+  double precision, intent (in) :: low,up
+  double precision :: shift, cur, prev, root, weight
+  character (len = 9) :: fileArr(1:9)
+  integer :: fileChoice
+  
+  fileArr(1:) = (/'002pt.dat','004pt.dat','008pt.dat','016pt.dat','032pt.dat','064pt.dat','128pt.dat', '256pt.dat','512pt.dat'/)
+  
+  cur = 0.0D0
+  prev = 1.0D0
+  
+  fileChoice = 1
+  
+  do while (abs(cur - prev)>=tolerance .and. fileChoice < 10) 
+    prev = cur
+    cur = 0.0D0
+    open (unit = 100, file = fileArr(fileChoice), status = 'old')
+    print *, "Using : ", fileArr(fileChoice)
+  101    read(100,*, end = 102) root, weight
+            !print *, root, weight
+            shift = ( ( (up-low)*root ) + (low + up) )/ 2.0D0
+            !print *, "Shift = ", shift
+            cur = cur + ( ( calcSpline(shift) - baseline )* weight)
+         goto 101
+  102 continue
+    close(100)
+    cur = cur * ( (up-low)/2.0D0 )
+    print *, cur
+    fileChoice = fileChoice + 1
+  end do
+
+  Gauss = cur
+
+end function Gauss
 
 
 end program nmr
