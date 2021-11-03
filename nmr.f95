@@ -77,6 +77,9 @@ if (filtertype /= 0 .and. filterSize /= 0) then
             call boxFilter
         end do
     else if (filtertype == 2) then
+      do l = 1, filterpasses
+        call SGFilter
+      end do
     end if
 else
     print *, "Filter is off"
@@ -95,26 +98,32 @@ call buildSpline(xpts, ypts, bvals, cvals, dvals, count)
 
 
 open (unit=17, file=outputfile, status='unknown')
-  hld = xpts(0)
-  do while (hld <= xpts(count))
-    write (17,*) hld, calcSpline(hld)
-    hld = hld + (abs(xpts(count) - xpts(0)) / 10000.0D0)
+  !hld = xpts(0)
+  !do while (hld <= xpts(count))
+    !write (17,*) hld, calcSpline(hld)
+    !hld = hld + (abs(xpts(count) - xpts(0)) / 10000.0D0)
+  !end do
+  
+  do i=0, count
+    write(17,*) xpts(i), ypts(i)
   end do
 close(17)
 
 call findIntPoints
+
 do i =1, peaks
   print *, "Peak at: ", lowIntPts(i) , upIntPts(i)
 end do
 
 
 
-call integrate
+!call integrate
 
 
-do i=1, peaks
-  print *, intAreas(i)
-end do
+!do i=1, peaks
+  !print *, intAreas(i)
+!end do
+
 
 
 
@@ -184,15 +193,15 @@ subroutine boxFilter
     double precision :: ysum, temp(0:MAXPTS)
     integer :: offset, i, j, l, k, lowBound, upBound
 
-    temp(0:) = ypts(0:)
-    offset = filterSize / 2
+    !temp(0:) = ypts(0:)
+    offset = (filterSize - 1)/ 2
     
     ysum = 0.0D0
 
     iloop: do i = 0, count, 1
-        ysum = 0
-        lowBound = i - offset
-        upBound = i + offset
+        ysum = 0.0D0
+        lowBound = i - (offset)
+        upBound = i + (offset)
         
         if (lowBound < 0) then
             do k = lowBound , -1, 1
@@ -217,6 +226,7 @@ subroutine boxFilter
         ysum = ysum / real(filterSize, kind = 8)
         
         temp(i) = ysum
+        !ypts(i) = ysum
     end do iloop
 
     ypts(0:) = temp(0:)
@@ -230,15 +240,84 @@ end subroutine boxFilter
 
 subroutine SGFilter
 
-double precision :: m
-integer :: i
 
-m = count - (filterSize - 1)
-
-do i = 2, filterSize
-end do
+    double precision :: five(1:5), eleven(1:11), seventeen(1:17), weights(1:17), wfive,weleven,wseventeen,div
 
 
+    double precision :: ysum, temp(0:MAXPTS)
+    integer :: offset, i, j, l, k, lowBound, upBound, wcount
+
+
+    five(1:5) = (/-3,12,17,12,-3/)
+    wfive = 35
+    eleven(1:11) = (/-36,9,44,69,84,89,84,69,44,9,-36/)
+    weleven = 429
+    seventeen(1:17) = (/-21,-6,7,18,27,34,39,42,43,42,39,34,27,18,7,-6,-21/)
+    wseventen = 323
+    
+    !temp(0:) = ypts(0:)
+    offset = (filterSize - 1)/ 2
+    wcount = 1
+    
+    print *, "Offset: ", offset, filterSize
+    
+    ysum = 0.0D0
+    
+    if (filterSize == 5) then
+      weights(1:5) = five(1:5)
+      div = wfive
+    else if (filterSize == 11) then
+      weights(1:11) = eleven(1:11)
+      div = weleven
+    else
+      weights(1:17) = seventeen(1:17)
+      div = wseventeen
+    end if
+
+    iloop: do i = 0, count, 1
+      print *, "Point :  " , i
+        ysum = 0
+        wcount = 1
+        lowBound = i - offset
+        upBound = i + offset
+        print *, "Before first loop"
+        if (lowBound < 0) then
+            do k = lowBound , -1, 1
+              !print *, "Before other print"
+              print *, "  Include below ", count + k + 1, "  value  ", ypts(count + k + 1), " weight ", weights(wcount)
+                ysum = ysum + ( ypts(count + k + 1) * weights(wcount) )
+                lowBound = lowBound + 1
+                wcount = wcount + 1
+            end do
+        end if
+        
+        if (upBound > count) then
+            do l = upBound - count - 1, 0, -1
+              print *, "  Include above ", l, "  value  ", ypts(l), " weight ", weights(wcount)
+                ysum = ysum + ( ypts(l) * weights(wcount) )
+                upBound = upBound - 1
+                wcount = wcount + 1
+            end do 
+            wcount = 1
+        end if
+
+
+        do j = lowBound, upBound, 1
+            print *, "  Include in ", j, "  value  ", ypts(j), " weight ", weights(wcount)
+            ysum = ysum + ( ypts(j) * weights(wcount) )
+            wcount = wcount + 1
+        end do
+
+        print *, "  Before divide :  ", ysum
+        ysum = ysum / div
+        print *, "  Sum : ", ysum
+        print *, ""
+        
+        !temp(i) = ysum
+        ypts(i) = ysum
+    end do iloop
+
+    !ypts(0:) = temp(0:)
 end subroutine SGFilter
 
 
@@ -303,11 +382,11 @@ peakCount = 1
 i = 1
 do while (xpts(i) < 0.0D0)
   if (ypts(i-1)>baseline .and. ypts(i)<baseline) then
-    print *, "Upper end"
+!    print *, "Upper end"
     upIntPts(peakCount) = bisection(xpts(i-1),xpts(i))
     peakCount = peakCount + 1
   else if(ypts(i-1)<baseline .and. ypts(i)>baseline) then
-    print *, "Lower end"
+!    print *, "Lower end"
     lowIntPts(peakCount) = bisection(xpts(i-1),xpts(i))
   end if
   
@@ -443,7 +522,7 @@ integer :: run, counter, i
 tol = tolerance
 counter = 0
 
-cur = 1.0D0
+cur = simpson(low,up)
 prev = 0.0D0
 ends = calcSpline(low) + calcSpline(up) - 2*baseline
 run = 3
@@ -471,7 +550,7 @@ do while (cur - prev >= tol)
   end do
   
   cur = (h* (ends + (2 * evens) + (4* odds)) )/3.0D0
-  !print *, "Cur | ", cur, " | Prev | ", prev, " | Diff | ", cur - prev
+  print *, "Cur | ", cur, " | Prev | ", prev, " | Diff | ", cur - prev
   run = run + 2
   !counter = counter + 1
 end do
@@ -488,7 +567,7 @@ double precision function romberg(low, up)
 double precision, intent (in) :: low, up
 double precision :: intsum, ans
 double precision :: h, arr(1:2,1:10)
-integer :: i
+integer :: i, k
 logical :: run
 
 
@@ -499,7 +578,7 @@ run = .true.
 
 h = up - low
 
-arr(1,1) =(h/2) * (calcSpline(low) + calcSpline(up))
+arr(1,1) =(h/2) * (calcSpline(low) + calcSpline(up) - 2*baseline)
 
 i = 2
 do while (i <= 10 .and. run )
