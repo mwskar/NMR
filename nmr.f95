@@ -117,12 +117,12 @@ end do
 
 
 
-!call integrate
+call integrate
 
 
-!do i=1, peaks
-  !print *, intAreas(i)
-!end do
+do i=1, peaks
+  print *, intAreas(i)
+end do
 
 
 
@@ -225,11 +225,11 @@ subroutine boxFilter
 
         ysum = ysum / real(filterSize, kind = 8)
         
-        temp(i) = ysum
-        !ypts(i) = ysum
+        !temp(i) = ysum
+        ypts(i) = ysum
     end do iloop
 
-    ypts(0:) = temp(0:)
+    !ypts(0:) = temp(0:)
 end subroutine boxFilter
 
 
@@ -397,7 +397,7 @@ peaks = peakCount - 1
 
 end subroutine findIntPoints
 
-
+!!!!!!!!!!!!!!!! Integrate !!!!!!!!!!!!!!!!!!!!
 subroutine integrate
 integer :: k
 
@@ -498,20 +498,20 @@ end function bisection
 
 
 
-!!!!!!!!!! Simpson Integration !!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Simpson Integration !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 double precision function simpson(low, up)
 double precision, intent (in):: up, low
 double precision :: h
 
-h = (up - low) / 2
+h = (up - low) / 2.0D0
 
 simpson = (h/3.0D0) * ((calcSpline(low) - baseline) + (4.0D0 * (calcSpline(low+h)-baseline) ) + (calcSpline(up)-baseline))
 
 end function simpson
 
 
-!!!!!!!! Compotite Newton Cotes !!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Compotite Newton Cotes !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 double precision function CNC(low, up)
 
@@ -522,16 +522,16 @@ integer :: run, counter, i
 tol = tolerance
 counter = 0
 
-cur = simpson(low,up)
-prev = 0.0D0
+cur = 0.0D0 !simpson(low,up)
+prev = 1.0D0
 ends = calcSpline(low) + calcSpline(up) - 2*baseline
-run = 3
+run = 2
 
 
 !print *, "Diff: ", cur - prev, tol
 
-do while (cur - prev >= tol)
-  print *, "Calc"
+do while (abs(cur - prev) >= tol)
+  !print *, "Calc"
   prev = cur
   evens = 0.0D0
   odds = 0.0D0
@@ -549,8 +549,8 @@ do while (cur - prev >= tol)
     end if
   end do
   
-  cur = (h* (ends + (2 * evens) + (4* odds)) )/3.0D0
-  print *, "Cur | ", cur, " | Prev | ", prev, " | Diff | ", cur - prev
+  cur = (h* (ends + (2.0D0 * evens) + (4.0D0* odds)) )/3.0D0
+  !print *, "Cur | ", cur, " | Prev | ", prev, " | Diff | ", cur - prev
   run = run + 2
   !counter = counter + 1
 end do
@@ -559,7 +559,7 @@ CNC = cur
 end function CNC
 
 
-!!!!!!!!! Romberg !!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Romberg !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 double precision function romberg(low, up)
 
