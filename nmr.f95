@@ -9,6 +9,10 @@ double precision :: baseline, tolerance
 integer :: filtertype, filterSize, filterPasses, integrationChoice
 
 
+!!! Variables for shift
+double precision :: plotShift
+
+
 !!! variables for insertion sort
 double precision :: xpts(0:MAXPTS), ypts(0:MAXPTS)
 double precision :: xtmp, ytmp
@@ -21,9 +25,10 @@ double precision :: bvals(0:MAXPTS), cvals(0:MAXPTS), dvals(0:MAXPTS), x(0:MAXPT
 double precision :: hld
 
 
-!!! Vars for integration and output
-double precision :: lowIntPts(1:10), upIntPts(1:10),intAreas(1:10)
-integer :: peaks
+!!! Variables for integration, peaks, hydorgens, and output
+double precision :: lowIntPts(1:10), upIntPts(1:10),intAreas(1:10), peakTop(1:10), peakPos(1:10)
+integer :: peaks, hydroArr(1:10)
+
 
 
 !!!!!!!Read in instructions and store values
@@ -66,14 +71,13 @@ goto 100
 200 continue
 close(16)
 
-!print *, xpts(0:count)
+
 call TMshift
-!print *, xpts(0:count)
+
 
 if (filtertype /= 0 .and. filterSize /= 0) then
     if (filtertype == 1) then
         do l = 1, filterPasses
-            print *, "pass ", l
             call boxFilter
         end do
     else if (filtertype == 2) then
@@ -90,44 +94,65 @@ end if
 call buildSpline(xpts, ypts, bvals, cvals, dvals, count)
 
 
-!do i =0, 2
-!  hld = xpts(i)
-!  print*, "Xpts i = ", hld
-!  print*, calcSpline(hld)
-!end do
-
-
 open (unit=17, file=outputfile, status='unknown')
-  !hld = xpts(0)
-  !do while (hld <= xpts(count))
-    !write (17,*) hld, calcSpline(hld)
-    !hld = hld + (abs(xpts(count) - xpts(0)) / 10000.0D0)
-  !end do
-  
-  do i=0, count
-    write(17,*) xpts(i), ypts(i)
+  hld = xpts(0)
+  do while (hld <= xpts(count))
+    write (17,*) hld, calcSpline(hld)
+    hld = hld + (abs(xpts(count) - xpts(0)) / 10000.0D0)
   end do
 close(17)
 
 call findIntPoints
 
-do i =1, peaks
-  print *, "Peak at: ", lowIntPts(i) , upIntPts(i)
-end do
-
-
-
 call integrate
 
+call findTops
 
-do i=1, peaks
-  print *, intAreas(i)
+call calcHydrogens
+
+
+print*, "Program options"
+print*, "================================"
+print*, "Baseline adjustment  :", baseline
+print*, "Tolerance            :", tolerance
+if (filtertype == 1) then
+  print*,"Boxcar Filtering"
+  print*, "Boxcar Size (Cyclic) :", filterSize
+  print*, "Boxcar Passes        :", filterPasses
+else
+  print*,"SG Filtering"
+  print*, "SG Size (Cyclic) :", filterSize
+  print*, "SG Passes        :", filterPasses
+end if
+
+print*,
+print*, "Integration Method"
+print*, "============================="
+if (integrationChoice == 0) then
+  print*, "Composite Newton Cotes"
+else if (integrationChoice == 1) then
+  print*, "Romberg"
+else if (integrationChoice == 2) then
+  print*, "Adaptive Quadurature"
+else
+  print*, "Gauss"
+end if
+
+print*,
+
+print*, "Plot File Data"
+print*, "====================="
+print*, "File: ", outputFile
+print*, "Plot shifted ", plotShift, "ppm for TMS calibration"
+print*,
+
+write(*,"(6a10, /)", advance = 'no') "Peak ","End ","Location","Top","Area","Hydrogens"
+!write(*, '(/)')
+write(*, '(6a10)'), " =======", "================= ", "=============== ", " =============== ", " =============== ", " ========="
+
+do i=1,peaks, 1
+  print*, i, lowIntPts(i), upIntPts(i), peakPos(i),peakTop(i),intAreas(i),hydroArr(i) 
 end do
-
-
-
-
-
 contains
 
 
@@ -177,6 +202,7 @@ subroutine TMShift
                 xpts(l) = xpts(l) - shift
         end do
         
+        plotShift = shift
 
 end subroutine TMShift
 
@@ -416,6 +442,33 @@ end do
 
 end subroutine integrate
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!! Find Tops !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine findTops
+integer :: i
+  do i=1, peaks, 1
+    peakTop(i) = calcSpline( ( lowIntPts(i) + upIntPts(1) ) / 2.0D0)
+    peakPos = ( lowIntPts(i) + upIntPts(1) ) / 2.0D0
+  end do
+end subroutine findTops
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Calc Hydrogens !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine calcHydrogens
+  integer :: i
+  double precision :: minArea
+  minArea = intAreas(1)
+  do i=2, peaks
+    if (intAreas(i) < minArea) then
+      minArea = intAreas(i)
+    end if
+  end do
+
+  do i=1, peaks, 1
+    hydroArr(i) = IDINT(intAreas(i) / minArea)
+  end do
+
+end subroutine calcHydrogens
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!! Functions !!!!!!!!!!!!!!!
@@ -452,7 +505,7 @@ calcSpline = ans
 end function calcSpline
 
 
-!!!!!!!!!!!!!! Bisection !!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Bisection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 double precision function bisection (lowerBound, upperBound)
 
