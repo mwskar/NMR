@@ -55,6 +55,11 @@ subroutine sgFilter
 
     five(1:5) = (/-3,12,17,12,-3/)
     wfive = 35
+    eleven(1:11) = (/-36,9,44,69,84,89,84,69,44,9,-36/)
+    weleven = 429
+    seventeen(1:17) = (/-21,-6,7,18,27,34,39,42,43,42,39,34,27,18,7,-6,-21/)
+    wseventen = 323
+    
     temp(0:) = ypts(0:)
     offset = (filterSize - 1)/ 2
     wcount = 1
@@ -111,11 +116,11 @@ subroutine sgFilter
         print *, "  Sum : ", ysum
         print *, ""
         
-        temp(i) = ysum
-        !ypts(i) = ysum
+        !temp(i) = ysum
+        ypts(i) = ysum
     end do iloop
 
-    ypts(0:) = temp(0:)
+    !ypts(0:) = temp(0:)
 
 end subroutine sgFilter
 

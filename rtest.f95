@@ -14,22 +14,10 @@ ans = -1.0D0
 
 run = .true.
 
-print *, "Tol: ", tolerance
 
 h = up - low
 
-print *, "Up: ", up
-
 arr(1,1) =(h/2) * (calcSpline(low) + calcSpline(up))
-
-print *, arr(1,1)
-
-
-!arr(2,:) = 0
-
-!print *, arr(1,:)
-!print *, arr(2,:)
-
 
 !print *, "Test case: ", arr(1,i-1) - arr(2,i)
 

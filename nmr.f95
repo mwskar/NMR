@@ -99,22 +99,11 @@ end if
 
 call buildSpline(xpts, ypts, bvals, cvals, dvals, count)
 
-!!! Writes the spline data to the directed putput file
-!!! (Uses 10,000 data points to deliver a decent appx)
-
-open (unit=17, file=outputfile, status='unknown')
-  hld = xpts(0)
-  do while (hld <= xpts(count))
-    write (17,*) hld, calcSpline(hld)
-    hld = hld + (abs(xpts(count) - xpts(0)) / 10000.0D0)
-  end do
-close(17)
-
 !!! Searches through the data set for the begining and end of peaks
 
 call findIntPoints
 
-!!! Integrates the peaks wiht the users choice of
+!!! Integrates the peaks with the users choice of
 !!! method and tolerance
 
 call integrate
@@ -130,52 +119,86 @@ call calcHydrogens
 
 
 
-!!!! Presents information in text output
+!!!! Presents information in text output and writes to output file
+!open (unit = 16, file = inputFile, status = 'old')
 
-
+open(unit = 102, file = outputFile, status = 'unknown' )
 
 print*, "Program options"
+write(102,*) "Program options"
 print*, "================================"
+write(102,*) "================================"
 print*, "Baseline adjustment  :", baseline
+write(102,*) "Baseline adjustment  :", baseline
 print*, "Tolerance            :", tolerance
+write(102,*) "Tolerance            :", tolerance
+
+
 if (filtertype == 1) then
   print*,"Boxcar Filtering"
+  write(102,*) "Boxcar Filtering"
   print*, "Boxcar Size (Cyclic) :", filterSize
+  write(102,*) "Boxcar Size (Cyclic) :", filterSize
   print*, "Boxcar Passes        :", filterPasses
+  write(102,*) "Boxcar Passes        :", filterPasses
 else
   print*,"SG Filtering"
+  write(102,*) "SG Filtering"
   print*, "SG Size (Cyclic) :", filterSize
+  write(102,*) "SG Size (Cyclic) :", filterSize
   print*, "SG Passes        :", filterPasses
+  write(102,*) "SG Passes        :", filterPasses
 end if
 
 print*,
+write(102,'(/)') 
 print*, "Integration Method"
+write(102,*) "Integration Method"
 print*, "============================="
+write(102,*) "============================="
+
 if (integrationChoice == 0) then
   print*, "Composite Newton Cotes"
+  write(102,*) "Composite Newton Cotes"
 else if (integrationChoice == 1) then
   print*, "Romberg"
+  write(102,*) "Romberg"
 else if (integrationChoice == 2) then
   print*, "Adaptive Quadurature"
+  write(102,*) "Adaptive Quadurature"
 else
   print*, "Gauss"
+  write(102,*) "Gauss"
 end if
 
 print*,
+write(102,'(/)')
 
 print*, "Plot File Data"
+write(102,*) "Plot File Data"
 print*, "====================="
+write(102,*) "====================="
 print*, "File: ", outputFile
-print*, "Plot shifted ", plotShift, "ppm for TMS calibration"
-print*,
+write(102,*) "File: ", outputFile
 
-write(*,"(7a10, /)", advance = 'no') "Peak ","Begin","End ","Location","Top","Area","Hydrogens"
-!write(*, '(/)')
-write(*, '(6a10)'), " =======", "================= ", "=============== ", " =============== ", " =============== ", " ========="
+print*, "Plot shifted ", plotShift, "ppm for TMS calibration"
+write(102,*) "Plot shifted ", plotShift, "ppm for TMS calibration"
+print*,
+write(102,'(/)')
+
+
+write(*,"(5X, 7a10, 5X, /)", advance = 'no') "Peak ","Begin","End ","Location","Top","Area","Hydrogens"
+write(102,"(5X, 7a10, /)", advance = 'no') "Peak ","Begin","End ","Location","Top","Area","Hydrogens"
+write(*, '(5X, 6a10)'), " =======", "========= ", "=============== ", " =========== ", " =============== ", " ========="
+write(102, '(5X, 6a10)'), " =======", "========= ", "============ ", " ============= ", " =============== ", " ========="
 
 do i=1,peaks, 1
-  print*, i, lowIntPts(i), upIntPts(i), peakPos(i),peakTop(i),intAreas(i),hydroArr(i) 
+  print*, i, lowIntPts(i), upIntPts(i), peakPos(i),peakTop(i),intAreas(i),hydroArr(i)
+  write(102, *) i, lowIntPts(i), upIntPts(i), peakPos(i),peakTop(i),intAreas(i),hydroArr(i)
 end do
+
+close(102)
+
 contains
 
 
@@ -670,7 +693,8 @@ end function simpson
 !! Uses the Composite Newton Cotes method to integrate the peak
 !! by addinng more subsections to calcualte untill tolerance is met
 
-!! takes in 
+!! takes in the lower and upper bound for inetegration
+!! returns the area
 
 double precision function CNC(low, up)
 
@@ -681,37 +705,34 @@ integer :: run, counter, i
 tol = tolerance
 counter = 0
 
-cur = 0.0D0 !simpson(low,up)
+cur = 0.0D0
 prev = 1.0D0
 ends = calcSpline(low) + calcSpline(up) - 2*baseline
 run = 2
 
 
-!print *, "Diff: ", cur - prev, tol
-
+!! As the loop increments, more sub sections are added to integrate
 do while (abs(cur - prev) >= tol)
-  !print *, "Calc"
   prev = cur
   evens = 0.0D0
   odds = 0.0D0
   h = (up - low) / run
   
+  !! Calcualtes the values of the subsections
   do i = 1, run - 1
     ihold = i
+    !! Add to evens
     if (mod(i,2)==0) then
-    !print *, "Evens: ", evens, " plus ", calcSpline(low + (ihold*h)), " @ ", low + (ihold*h)
       evens = evens + ( calcspline(low + (ihold*h)) - baseline )
-      
+    !! Add to odds
     else
-    !print *, "Odds: ", odds, " plus ", calcSpline(low + (ihold*h)), " @ ", low + (ihold*h)
       odds = odds + ( calcSpline(low + (ihold*h)) - baseline)
     end if
   end do
   
+  !! Calcuates the Composite Newton Cotes integration
   cur = (h* (ends + (2.0D0 * evens) + (4.0D0* odds)) )/3.0D0
-  !print *, "Cur | ", cur, " | Prev | ", prev, " | Diff | ", cur - prev
   run = run + 2
-  !counter = counter + 1
 end do
 
 CNC = cur
@@ -719,6 +740,13 @@ end function CNC
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Romberg !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! Integrates using Romberg integration
+!! Builds an expanding list of values that determines
+!! an accurate integral
+
+!! takes in the lower and upper bounds
+!! retuns the area
 
 double precision function romberg(low, up)
 
@@ -729,36 +757,32 @@ double precision :: h, arr(1:2,1:10)
 integer :: i, k
 logical :: run
 
-
 ans = -1.0D0
-
 run = .true.
-
-
 h = up - low
 
+!! Calcs the starting point
 arr(1,1) =(h/2) * (calcSpline(low) + calcSpline(up) - 2*baseline)
 
 i = 2
 do while (i <= 10 .and. run )
-    !print *, "Tol check : ", arr(1,i-1) - arr(2,i)
     intsum = 0.0D0
+    
+    !! Calcs the 'left most' value for the row
     do k = 1, 2**(i-2)
         intsum = intsum + ( calcSpline(low + (k-0.5D0)*h) - baseline)
-        !print *, "Sum: ", intsum
     end do
     
+    !! Recursively calcs the rest of the row
     arr(2,1) = (0.5D0) * ( arr(1,1) + h * intsum)
-    !print *, "new root: ", arr(2,1)
     do j = 2, i
         arr(2,j) = arr(2,j-1) + ( (arr(2,j-1) - arr(1,j-1)) / (4**(j-1) -1) )
     end do
 
-    !print *, arr(2,1:i)
-
-
+    !! Checks tolerance
     if (abs(arr(1,i-1) - arr(2,i) ) < tolerance) run = .false.
 
+    !! upadates storage arays
     do l=1,10
         arr(1,l) = arr(2,l)
     end do
@@ -767,7 +791,6 @@ do while (i <= 10 .and. run )
 
     h = h / 2
     i = i + 1
-
 end do
 
 end function romberg
@@ -778,21 +801,28 @@ end function romberg
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Adaptive Quadurature !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+
+!! Uses the Adaptive Quadurature Method of integration
+!! This method relys on recursively calling itelf using continuously smaller
+!! bounds
+
+!! takes in the lower and upper bounds as well as the tolerance
+!! retuns the area of the current bounds
+
 double precision recursive function adquad(low, up, tol) result (ans)
 double precision, intent (in) :: low,up,tol
 double precision :: mid, cur, halves
 
-!print *, "Run"
+!! Calcs the areas using Simpson's itegration method
 mid =( up + low ) / 2
 cur = simpson(low,up)
 halves = simpson(low,mid) + simpson(mid,up)
 
-!print *, cur , halves
-
-if (cur - halves < tol) then
-ans= halves
-else
-ans = adquad(low, mid, tol/2) + adquad(mid, up, tol/2)
+!! If tolerance is met
+if (cur - halves < tol) then !! return the value betwene these bounds
+  ans= halves
+else !! Recursive call with smaller bounds
+  ans = adquad(low, mid, tol/2) + adquad(mid, up, tol/2)
 end if
 
 
@@ -802,15 +832,20 @@ end function adquad
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Gauss Quad !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+!! Integrates using Gaussian Quadurature which
+!! calulates by transforming the function onto the [-1,1]
+!! domain and using weights and new root (x) values
+
+!! takes lower and upper bounds
+!! returns area
+
 double precision function Gauss(low,up)
-
-
   double precision, intent (in) :: low,up
   double precision :: shift, cur, prev, root, weight
   character (len = 9) :: fileArr(1:9)
   integer :: fileChoice
-!  double precision  calcSpline
-!        external calcSpline
+
+  !! Array of files holding the appropritae weights and roots
   fileArr(1:) = (/'002pt.dat','004pt.dat','008pt.dat','016pt.dat','032pt.dat','064pt.dat','128pt.dat', '256pt.dat','512pt.dat'/)
   
   cur = 0.0D0
@@ -818,21 +853,23 @@ double precision function Gauss(low,up)
   
   fileChoice = 1
   
+  !! Check tolerance
   do while (abs(cur - prev)>=tolerance .and. fileChoice < 10) 
     prev = cur
     cur = 0.0D0
-    open (unit = 100, file = fileArr(fileChoice), status = 'old')
-    print *, "Using : ", fileArr(fileChoice)
-  101    read(100,*, end = 102) root, weight
-            !print *, root, weight
+
+    !! Reading file acts as a de-facto loop
+    open (unit = 100, file = fileArr(fileChoice), status = 'old') ! Open current file
+  101    read(100,*, end = 102) root, weight ! Read in the roots and weights
+            !! Calcuates the apropriate shift and applys the new root
+            !! then sums the values of the number of appropritae
+            !! calcuations 
             shift = ( ( (up-low)*root ) + (low + up) )/ 2.0D0
-            !print *, "Shift = ", shift
             cur = cur + ( ( calcSpline(shift) - baseline )* weight)
          goto 101
   102 continue
     close(100)
     cur = cur * ( (up-low)/2.0D0 )
-    print *, cur
     fileChoice = fileChoice + 1
   end do
 

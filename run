@@ -1,0 +1,2 @@
+gfortran nmr.f95
+./a.out
