@@ -150,7 +150,7 @@ else
   write(102,*) "SG Passes        :", filterPasses
 end if
 
-print*,
+print*, ""
 write(102,'(/)') 
 print*, "Integration Method"
 write(102,*) "Integration Method"
@@ -171,7 +171,7 @@ else
   write(102,*) "Gauss"
 end if
 
-print*,
+print*, ""
 write(102,'(/)')
 
 print*, "Plot File Data"
@@ -183,7 +183,7 @@ write(102,*) "File: ", outputFile
 
 print*, "Plot shifted ", plotShift, "ppm for TMS calibration"
 write(102,*) "Plot shifted ", plotShift, "ppm for TMS calibration"
-print*,
+print*, ""
 write(102,'(/)')
 
 
